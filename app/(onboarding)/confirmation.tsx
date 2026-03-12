@@ -73,9 +73,9 @@ export default function ConfirmationScreen() {
             <View style={styles.divider} />
             <RuleSummaryRow label="Max Positions" value={`${rules.maxOpenPositions}`} />
             <View style={styles.divider} />
-            <RuleSummaryRow label="Sector Exposure" value={formatPercent(rules.maxSectorExposure)} />
+            <RuleSummaryRow label="Sector Exposure" value={rules.maxSectorExposure !== null ? formatPercent(rules.maxSectorExposure) : 'N/A'} />
             <View style={styles.divider} />
-            <RuleSummaryRow label="Single Stock Max" value={formatPercent(rules.maxSingleStockAllocation)} />
+            <RuleSummaryRow label="Single Stock Max" value={rules.maxSingleStockAllocation !== null ? formatPercent(rules.maxSingleStockAllocation) : 'N/A'} />
           </Card>
         </Animated.View>
 

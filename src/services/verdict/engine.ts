@@ -22,8 +22,9 @@ export function evaluateTrade(
     evaluateRiskPerTrade(trade, rules, profile),
     evaluateDailyLossLimit(trade, rules, profile, dailyStats),
     evaluateOpenPositions(rules, dailyStats),
-    evaluateSectorExposure(trade, rules, profile, dailyStats),
-    evaluateSingleStockAllocation(trade, rules, profile),
+    // Skip sector/stock allocation checks when rule is set to N/A (null)
+    ...(rules.maxSectorExposure !== null ? [evaluateSectorExposure(trade, rules, profile, dailyStats)] : []),
+    ...(rules.maxSingleStockAllocation !== null ? [evaluateSingleStockAllocation(trade, rules, profile)] : []),
     evaluateStopLoss(trade),
   ];
 
@@ -140,7 +141,7 @@ function evaluateSectorExposure(
   const currentSectorPercent = dailyStats.sectorExposure[sector] || 0;
   const tradeAllocationPercent = profile.accountSize > 0 ? (trade.totalCost / profile.accountSize) * 100 : 0;
   const projectedExposure = currentSectorPercent + tradeAllocationPercent;
-  const limitPercent = rules.maxSectorExposure;
+  const limitPercent = rules.maxSectorExposure!; // Only called when not null
 
   let severity: RuleSeverity = 'ok';
   if (projectedExposure > limitPercent) severity = 'violation';
@@ -168,7 +169,7 @@ function evaluateSingleStockAllocation(
   profile: UserProfile
 ): RuleEvaluation {
   const allocationPercent = profile.accountSize > 0 ? (trade.totalCost / profile.accountSize) * 100 : 0;
-  const limitPercent = rules.maxSingleStockAllocation;
+  const limitPercent = rules.maxSingleStockAllocation!; // Only called when not null
 
   let severity: RuleSeverity = 'ok';
   if (allocationPercent > limitPercent) severity = 'violation';
@@ -295,25 +296,29 @@ export function calculatePositionSize(
   let adjustedForExposure = false;
   let adjustmentReason: string | undefined;
 
-  // Constraint: single stock allocation
-  const maxAllocationDollars = (rules.maxSingleStockAllocation / 100) * accountSize;
-  const maxSharesByAllocation = Math.floor(maxAllocationDollars / trade.entryPrice);
-  if (recommendedShares > maxSharesByAllocation) {
-    recommendedShares = maxSharesByAllocation;
-    adjustedForExposure = true;
-    adjustmentReason = `Reduced to stay within ${rules.maxSingleStockAllocation}% single stock limit`;
+  // Constraint: single stock allocation (skip if N/A)
+  if (rules.maxSingleStockAllocation !== null) {
+    const maxAllocationDollars = (rules.maxSingleStockAllocation / 100) * accountSize;
+    const maxSharesByAllocation = Math.floor(maxAllocationDollars / trade.entryPrice);
+    if (recommendedShares > maxSharesByAllocation) {
+      recommendedShares = maxSharesByAllocation;
+      adjustedForExposure = true;
+      adjustmentReason = `Reduced to stay within ${rules.maxSingleStockAllocation}% single stock limit`;
+    }
   }
 
-  // Constraint: sector exposure
-  const sector = trade.sector || 'Unknown';
-  const currentSectorDollars = ((dailyStats.sectorExposure[sector] || 0) / 100) * accountSize;
-  const maxSectorDollars = (rules.maxSectorExposure / 100) * accountSize;
-  const availableSectorDollars = Math.max(0, maxSectorDollars - currentSectorDollars);
-  const maxSharesBySector = Math.floor(availableSectorDollars / trade.entryPrice);
-  if (recommendedShares > maxSharesBySector) {
-    recommendedShares = maxSharesBySector;
-    adjustedForExposure = true;
-    adjustmentReason = `Reduced due to ${sector} sector exposure`;
+  // Constraint: sector exposure (skip if N/A)
+  if (rules.maxSectorExposure !== null) {
+    const sector = trade.sector || 'Unknown';
+    const currentSectorDollars = ((dailyStats.sectorExposure[sector] || 0) / 100) * accountSize;
+    const maxSectorDollars = (rules.maxSectorExposure / 100) * accountSize;
+    const availableSectorDollars = Math.max(0, maxSectorDollars - currentSectorDollars);
+    const maxSharesBySector = Math.floor(availableSectorDollars / trade.entryPrice);
+    if (recommendedShares > maxSharesBySector) {
+      recommendedShares = maxSharesBySector;
+      adjustedForExposure = true;
+      adjustmentReason = `Reduced due to ${sector} sector exposure`;
+    }
   }
 
   // Constraint: remaining daily risk

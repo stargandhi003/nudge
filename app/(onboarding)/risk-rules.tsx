@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { FadeInDown } from 'react-native-reanimated';
@@ -126,31 +126,89 @@ export default function RiskRulesScreen() {
           delay={600}
         />
 
-        <RuleCard
-          title="Max Sector Exposure"
-          description="Maximum percentage of your account in any single sector"
-          value={rules.maxSectorExposure}
-          onValueChange={(v) => updateRule('maxSectorExposure', Math.round(v))}
-          min={RULE_LIMITS.maxSectorExposure.min}
-          max={RULE_LIMITS.maxSectorExposure.max}
-          step={RULE_LIMITS.maxSectorExposure.step}
-          suffix="%"
-          dollarEquivalent={`That's ${formatCurrency((rules.maxSectorExposure / 100) * accountSize)} per sector`}
-          delay={700}
-        />
+        {/* Max Sector Exposure — with N/A toggle */}
+        <Animated.View entering={FadeInDown.delay(700).duration(500)}>
+          <Card>
+            <View style={styles.ruleHeader}>
+              <Text style={styles.ruleTitle}>Max Sector Exposure</Text>
+              <TouchableOpacity
+                style={[styles.naToggle, rules.maxSectorExposure === null && styles.naToggleActive]}
+                onPress={() => updateRule('maxSectorExposure', rules.maxSectorExposure === null ? RULE_LIMITS.maxSectorExposure.default : null)}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.naToggleText, rules.maxSectorExposure === null && styles.naToggleTextActive]}>N/A</Text>
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.ruleDescription}>Maximum percentage of your account in any single sector</Text>
+            {rules.maxSectorExposure !== null ? (
+              <>
+                <Text style={styles.ruleValue}>{formatPercent(rules.maxSectorExposure, 0)}</Text>
+                <Text style={styles.dollarEquiv}>{`That's ${formatCurrency((rules.maxSectorExposure / 100) * accountSize)} per sector`}</Text>
+                <View style={styles.sliderContainer}>
+                  <Slider
+                    style={styles.slider}
+                    minimumValue={RULE_LIMITS.maxSectorExposure.min}
+                    maximumValue={RULE_LIMITS.maxSectorExposure.max}
+                    step={RULE_LIMITS.maxSectorExposure.step}
+                    value={rules.maxSectorExposure}
+                    onValueChange={(v) => updateRule('maxSectorExposure', Math.round(v))}
+                    minimumTrackTintColor={colors.primary}
+                    maximumTrackTintColor={colors.surfaceHover}
+                    thumbTintColor={colors.primary}
+                  />
+                  <View style={styles.sliderLabels}>
+                    <Text style={styles.sliderLabel}>{RULE_LIMITS.maxSectorExposure.min}%</Text>
+                    <Text style={styles.sliderLabel}>{RULE_LIMITS.maxSectorExposure.max}%</Text>
+                  </View>
+                </View>
+              </>
+            ) : (
+              <Text style={styles.naLabel}>This rule is disabled</Text>
+            )}
+          </Card>
+        </Animated.View>
 
-        <RuleCard
-          title="Max Single Stock"
-          description="Maximum percentage of your account in a single stock"
-          value={rules.maxSingleStockAllocation}
-          onValueChange={(v) => updateRule('maxSingleStockAllocation', Math.round(v))}
-          min={RULE_LIMITS.maxSingleStockAllocation.min}
-          max={RULE_LIMITS.maxSingleStockAllocation.max}
-          step={RULE_LIMITS.maxSingleStockAllocation.step}
-          suffix="%"
-          dollarEquivalent={`That's ${formatCurrency((rules.maxSingleStockAllocation / 100) * accountSize)} per stock`}
-          delay={800}
-        />
+        {/* Max Single Stock — with N/A toggle */}
+        <Animated.View entering={FadeInDown.delay(800).duration(500)}>
+          <Card>
+            <View style={styles.ruleHeader}>
+              <Text style={styles.ruleTitle}>Max Single Stock</Text>
+              <TouchableOpacity
+                style={[styles.naToggle, rules.maxSingleStockAllocation === null && styles.naToggleActive]}
+                onPress={() => updateRule('maxSingleStockAllocation', rules.maxSingleStockAllocation === null ? RULE_LIMITS.maxSingleStockAllocation.default : null)}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.naToggleText, rules.maxSingleStockAllocation === null && styles.naToggleTextActive]}>N/A</Text>
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.ruleDescription}>Maximum percentage of your account in a single stock</Text>
+            {rules.maxSingleStockAllocation !== null ? (
+              <>
+                <Text style={styles.ruleValue}>{formatPercent(rules.maxSingleStockAllocation, 0)}</Text>
+                <Text style={styles.dollarEquiv}>{`That's ${formatCurrency((rules.maxSingleStockAllocation / 100) * accountSize)} per stock`}</Text>
+                <View style={styles.sliderContainer}>
+                  <Slider
+                    style={styles.slider}
+                    minimumValue={RULE_LIMITS.maxSingleStockAllocation.min}
+                    maximumValue={RULE_LIMITS.maxSingleStockAllocation.max}
+                    step={RULE_LIMITS.maxSingleStockAllocation.step}
+                    value={rules.maxSingleStockAllocation}
+                    onValueChange={(v) => updateRule('maxSingleStockAllocation', Math.round(v))}
+                    minimumTrackTintColor={colors.primary}
+                    maximumTrackTintColor={colors.surfaceHover}
+                    thumbTintColor={colors.primary}
+                  />
+                  <View style={styles.sliderLabels}>
+                    <Text style={styles.sliderLabel}>{RULE_LIMITS.maxSingleStockAllocation.min}%</Text>
+                    <Text style={styles.sliderLabel}>{RULE_LIMITS.maxSingleStockAllocation.max}%</Text>
+                  </View>
+                </View>
+              </>
+            ) : (
+              <Text style={styles.naLabel}>This rule is disabled</Text>
+            )}
+          </Card>
+        </Animated.View>
       </ScrollView>
 
       <View style={styles.bottom}>
@@ -235,6 +293,34 @@ const styles = StyleSheet.create({
     fontSize: typography.xs,
     fontFamily: typography.regular,
     color: colors.textMuted,
+  },
+  naToggle: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: radii.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  naToggleActive: {
+    backgroundColor: colors.primary + '20',
+    borderColor: colors.primary,
+  },
+  naToggleText: {
+    fontSize: typography.xs,
+    fontFamily: typography.bold,
+    color: colors.textMuted,
+    letterSpacing: 0.5,
+  },
+  naToggleTextActive: {
+    color: colors.primary,
+  },
+  naLabel: {
+    fontSize: typography.sm,
+    fontFamily: typography.regular,
+    color: colors.textMuted,
+    fontStyle: 'italic',
+    marginTop: spacing.sm,
   },
   bottom: {
     padding: spacing.xl,

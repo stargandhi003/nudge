@@ -15,7 +15,7 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.nudge.app",
+      "bundleIdentifier": "com.nudgetrading.app",
       "buildNumber": "1",
       "requireFullScreen": true,
       "config": {
@@ -23,7 +23,9 @@
       },
       "infoPlist": {
         "NSUserTrackingUsageDescription": "This app does not track you.",
-        "CFBundleLocalizations": ["en"],
+        "CFBundleLocalizations": [
+          "en"
+        ],
         "CFBundleDevelopmentRegion": "en"
       }
     },
@@ -33,7 +35,7 @@
         "backgroundColor": "#0A0E17"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.nudge.app"
+      "package": "com.nudgetrading.app"
     },
     "plugins": [
       "expo-router",
@@ -43,8 +45,9 @@
     ],
     "extra": {
       "eas": {
-        "projectId": ""
-      }
+        "projectId": "4bd0df34-3179-45fc-9d71-68ece98ed50b"
+      },
+      "router": {}
     }
   }
 }

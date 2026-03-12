@@ -86,8 +86,8 @@ export interface RiskRules {
   maxRiskPerTrade: number;
   dailyLossLimit: number;
   maxOpenPositions: number;
-  maxSectorExposure: number;
-  maxSingleStockAllocation: number;
+  maxSectorExposure: number | null;          // null = N/A (disabled)
+  maxSingleStockAllocation: number | null;   // null = N/A (disabled)
   requireStopLoss: boolean;
   // Behavioral rules
   dailyTradeLimit: number;

@@ -12,7 +12,7 @@ import { useTradeRecordStore } from '../../src/stores/useTradeRecordStore';
 import { useWatchlistStore } from '../../src/stores/useWatchlistStore';
 import { useUserStore } from '../../src/stores/useUserStore';
 import { useRulesStore } from '../../src/stores/useRulesStore';
-import { TradeDirection, ProposedTrade, TradeRecord } from '../../src/types/models';
+import { TradeDirection, AssetType, ProposedTrade, TradeRecord } from '../../src/types/models';
 import { formatCurrency, formatPercent } from '../../src/utils/formatting';
 import { Svg, Path } from 'react-native-svg';
 
@@ -45,6 +45,10 @@ export default function EnterTradeScreen() {
   const [tickerName, setTickerName] = useState('');
   const [tickerSector, setTickerSector] = useState('');
   const [direction, setDirection] = useState<TradeDirection>('buy');
+  const [assetType, setAssetType] = useState<AssetType>('stock');
+  const [optionType, setOptionType] = useState<'call' | 'put'>('call');
+  const [strikePrice, setStrikePrice] = useState('');
+  const [expirationDate, setExpirationDate] = useState('');
   const [entryPrice, setEntryPrice] = useState('');
   const [stopLoss, setStopLoss] = useState('');
   const [takeProfit, setTakeProfit] = useState('');
@@ -80,6 +84,23 @@ export default function EnterTradeScreen() {
     setShowTickerSearch(false);
   };
 
+  const useCustomTicker = () => {
+    if (!searchQuery.trim()) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const symbol = searchQuery.trim().toUpperCase();
+    setTicker(symbol);
+    setTickerName(symbol);
+    setTickerSector('');
+    setSearchQuery('');
+    setShowTickerSearch(false);
+  };
+
+  // Check if typed query exactly matches an existing ticker
+  const exactMatch = searchQuery.trim() && allTickers.some(
+    (t) => t.ticker.toLowerCase() === searchQuery.trim().toLowerCase()
+  );
+  const showUseCustom = searchQuery.trim().length >= 1 && !exactMatch;
+
   // Parse inputs
   const entry = parseFloat(entryPrice);
   const stop = parseFloat(stopLoss);
@@ -88,11 +109,12 @@ export default function EnterTradeScreen() {
   // Auto-calculate ideal position size from stop loss + risk rules
   const riskPerShare = entry && stop && stop !== entry ? Math.abs(entry - stop) : 0;
   const maxRiskDollars = accountSize * (maxRiskPerTrade / 100);
-  const maxAllocationDollars = accountSize * (maxSingleStockAllocation / 100);
 
   let idealShares = riskPerShare > 0 ? Math.floor(maxRiskDollars / riskPerShare) : 0;
 
-  if (idealShares > 0 && entry > 0) {
+  // Constrain by single stock allocation (skip if N/A / null)
+  if (idealShares > 0 && entry > 0 && maxSingleStockAllocation !== null) {
+    const maxAllocationDollars = accountSize * (maxSingleStockAllocation / 100);
     const maxSharesByAllocation = Math.floor(maxAllocationDollars / entry);
     if (idealShares > maxSharesByAllocation) {
       idealShares = maxSharesByAllocation;
@@ -119,13 +141,18 @@ export default function EnterTradeScreen() {
     if (!isValid) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
 
+    const strike = parseFloat(strikePrice);
+    const optionSymbolStr = assetType === 'option'
+      ? `${ticker} ${expirationDate || ''} ${strike || ''} ${optionType.toUpperCase()}`
+      : undefined;
+
     const trade: Partial<ProposedTrade> = {
       id: generateId(),
       ticker,
-      assetType: 'stock',
+      assetType,
       direction,
       orderType: 'market',
-      quantity: idealShares,
+      quantity: assetType === 'option' ? idealShares : idealShares,
       entryPrice: entry,
       stopLossPrice: stop,
       takeProfitPrice: tp || undefined,
@@ -134,6 +161,8 @@ export default function EnterTradeScreen() {
       totalRisk,
       riskPercent,
       sector: tickerSector || undefined,
+      optionSymbol: optionSymbolStr,
+      premiumPerContract: assetType === 'option' ? entry : undefined,
       createdAt: new Date().toISOString(),
     };
 
@@ -168,10 +197,15 @@ export default function EnterTradeScreen() {
 
     const now = new Date().toISOString();
     const tradeId = generateId();
+    const strike = parseFloat(strikePrice);
+    const optionSymbolStr = assetType === 'option'
+      ? `${ticker} ${expirationDate || ''} ${strike || ''} ${optionType.toUpperCase()}`
+      : undefined;
+
     const trade: ProposedTrade = {
       id: tradeId,
       ticker,
-      assetType: 'stock',
+      assetType,
       direction,
       orderType: 'market',
       quantity: quickQty,
@@ -183,6 +217,8 @@ export default function EnterTradeScreen() {
       totalRisk: quickTotalRisk,
       riskPercent: quickRiskPercent,
       sector: tickerSector || undefined,
+      optionSymbol: optionSymbolStr,
+      premiumPerContract: assetType === 'option' ? entry : undefined,
       createdAt: now,
     };
 
@@ -292,14 +328,29 @@ export default function EnterTradeScreen() {
               </Svg>
               <TextInput
                 style={styles.searchInput}
-                placeholder="Search ticker or company..."
+                placeholder="Search or type any ticker..."
                 placeholderTextColor={colors.textMuted}
                 value={searchQuery}
                 onChangeText={setSearchQuery}
+                onSubmitEditing={useCustomTicker}
+                autoCapitalize="characters"
                 autoFocus
                 selectionColor={colors.primary}
+                returnKeyType="go"
               />
+              {showUseCustom && (
+                <TouchableOpacity style={styles.useCustomBtn} onPress={useCustomTicker} activeOpacity={0.7}>
+                  <Text style={styles.useCustomText}>Use</Text>
+                </TouchableOpacity>
+              )}
             </View>
+            {showUseCustom && (
+              <TouchableOpacity style={styles.customTickerRow} onPress={useCustomTicker} activeOpacity={0.7}>
+                <Text style={styles.customTickerHint}>Use "</Text>
+                <Text style={styles.customTickerSymbol}>{searchQuery.trim().toUpperCase()}</Text>
+                <Text style={styles.customTickerHint}>" as ticker</Text>
+              </TouchableOpacity>
+            )}
             <View style={styles.tickerGrid}>
               {filteredTickers.slice(0, 8).map((t) => (
                 <TouchableOpacity
@@ -341,6 +392,80 @@ export default function EnterTradeScreen() {
                 </TouchableOpacity>
               </View>
             </View>
+
+            {/* ── Asset Type Toggle (Stock / Option) ─── */}
+            <View style={styles.section}>
+              <Text style={styles.label}>Asset Type</Text>
+              <View style={styles.assetTypeToggle}>
+                <TouchableOpacity
+                  style={[styles.assetTypeBtn, assetType === 'stock' && styles.assetTypeBtnActive]}
+                  onPress={() => { setAssetType('stock'); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.assetTypeText, assetType === 'stock' && styles.assetTypeTextActive]}>Stock</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.assetTypeBtn, assetType === 'option' && styles.assetTypeBtnActive]}
+                  onPress={() => { setAssetType('option'); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.assetTypeText, assetType === 'option' && styles.assetTypeTextActive]}>Option</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* ── Options Fields (when option selected) ─── */}
+            {assetType === 'option' && (
+              <View style={styles.section}>
+                <Text style={styles.label}>Option Details</Text>
+                <View style={styles.assetTypeToggle}>
+                  <TouchableOpacity
+                    style={[styles.assetTypeBtn, optionType === 'call' && styles.optionCallActive]}
+                    onPress={() => { setOptionType('call'); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.assetTypeText, optionType === 'call' && styles.assetTypeTextActive]}>Call</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.assetTypeBtn, optionType === 'put' && styles.optionPutActive]}
+                    onPress={() => { setOptionType('put'); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.assetTypeText, optionType === 'put' && styles.assetTypeTextActive]}>Put</Text>
+                  </TouchableOpacity>
+                </View>
+                <View style={styles.priceRow}>
+                  <View style={styles.priceField}>
+                    <Text style={styles.priceFieldLabel}>Strike Price</Text>
+                    <View style={styles.priceInput}>
+                      <Text style={styles.prefix}>$</Text>
+                      <TextInput
+                        style={styles.priceText}
+                        value={strikePrice}
+                        onChangeText={setStrikePrice}
+                        placeholder="0.00"
+                        placeholderTextColor={colors.textMuted}
+                        keyboardType="decimal-pad"
+                        selectionColor={colors.primary}
+                      />
+                    </View>
+                  </View>
+                  <View style={styles.priceField}>
+                    <Text style={styles.priceFieldLabel}>Expiration (MM/DD)</Text>
+                    <View style={styles.priceInput}>
+                      <TextInput
+                        style={styles.priceText}
+                        value={expirationDate}
+                        onChangeText={setExpirationDate}
+                        placeholder="03/21"
+                        placeholderTextColor={colors.textMuted}
+                        selectionColor={colors.primary}
+                      />
+                    </View>
+                  </View>
+                </View>
+              </View>
+            )}
 
             {/* ── Step 2: Prices ─── */}
             <View style={styles.section}>
@@ -453,7 +578,7 @@ export default function EnterTradeScreen() {
                   <View style={styles.posHeroRow}>
                     <View style={styles.posHero}>
                       <Text style={styles.posHeroNum}>{quickQty}</Text>
-                      <Text style={styles.posHeroLabel}>shares</Text>
+                      <Text style={styles.posHeroLabel}>{assetType === 'option' ? 'contracts' : 'shares'}</Text>
                     </View>
                     <View style={styles.posDivider} />
                     <View style={styles.posHero}>
@@ -486,11 +611,11 @@ export default function EnterTradeScreen() {
               <View style={styles.section}>
                 <Text style={styles.label}>Position Size</Text>
                 <View style={styles.posCard}>
-                  {/* Top row: shares + value */}
+                  {/* Top row: shares/contracts + value */}
                   <View style={styles.posHeroRow}>
                     <View style={styles.posHero}>
                       <Text style={styles.posHeroNum}>{idealShares}</Text>
-                      <Text style={styles.posHeroLabel}>shares</Text>
+                      <Text style={styles.posHeroLabel}>{assetType === 'option' ? 'contracts' : 'shares'}</Text>
                     </View>
                     <View style={styles.posDivider} />
                     <View style={styles.posHero}>
@@ -624,6 +749,68 @@ const styles = StyleSheet.create({
     fontFamily: typography.regular,
     color: colors.textMuted,
     marginTop: 1,
+  },
+
+  // ── Custom Ticker
+  useCustomBtn: {
+    backgroundColor: colors.primary,
+    borderRadius: radii.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+  },
+  useCustomText: {
+    fontSize: typography.xs,
+    fontFamily: typography.bold,
+    color: colors.white,
+  },
+  customTickerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: spacing.xs,
+  },
+  customTickerHint: {
+    fontSize: typography.sm,
+    fontFamily: typography.regular,
+    color: colors.textMuted,
+  },
+  customTickerSymbol: {
+    fontSize: typography.sm,
+    fontFamily: typography.bold,
+    color: colors.primary,
+  },
+
+  // ── Asset Type Toggle
+  assetTypeToggle: {
+    flexDirection: 'row',
+    borderRadius: radii.md,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  assetTypeBtn: {
+    flex: 1,
+    paddingVertical: spacing.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surface,
+  },
+  assetTypeBtnActive: {
+    backgroundColor: colors.primary + '20',
+    borderColor: colors.primary,
+  },
+  assetTypeText: {
+    fontSize: typography.sm,
+    fontFamily: typography.bold,
+    color: colors.textMuted,
+  },
+  assetTypeTextActive: {
+    color: colors.primary,
+  },
+  optionCallActive: {
+    backgroundColor: colors.verdictProceed + '18',
+  },
+  optionPutActive: {
+    backgroundColor: colors.verdictStop + '18',
   },
 
   // ── Selected Ticker + Direction (one row)

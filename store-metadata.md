@@ -21,11 +21,15 @@ Track your trades in a personal journal with emotion tagging, setup pattern anal
 
 Key Features:
 - Pre-trade checkpoint with rule-based verdicts
+- Support for stocks and options (calls/puts, strike, expiration)
+- Custom ticker input — trade any symbol you want
 - Daily planning with mood and intention tracking
 - End-of-day accountability reviews
 - Trade journal with emotion and pattern tagging
 - Analytics dashboard with performance metrics
 - Streak tracking for consistent habits
+- Optional broker password vault — locked until you set your daily plan
+- Flexible rules — disable any rule with N/A opt-out
 - Fully offline — all data stays on your device
 - Dark theme designed for focus
 

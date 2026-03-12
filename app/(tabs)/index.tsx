@@ -19,6 +19,7 @@ import { useTradeRecordStore } from '../../src/stores/useTradeRecordStore';
 import { useDailyPlanStore } from '../../src/stores/useDailyPlanStore';
 import { useEndOfDayReviewStore } from '../../src/stores/useEndOfDayReviewStore';
 import { useStreakStore, STREAK_INFO } from '../../src/stores/useStreakStore';
+import { usePasswordVaultStore } from '../../src/stores/usePasswordVaultStore';
 import { EMOTION_OPTIONS, MARKET_BIAS_OPTIONS, SETUP_OPTIONS } from '../../src/types/models';
 import { formatCurrency, formatPercent } from '../../src/utils/formatting';
 import { format, addDays, subDays, isToday, parseISO } from 'date-fns';
@@ -165,10 +166,17 @@ export default function HomeScreen() {
     calculateDisciplineScore,
   } = useTradeRecordStore();
   const accountSize = profile?.accountSize ?? 0;
+  const dailyPlans = useDailyPlanStore((s) => s.plans);
   const getPlanByDate = useDailyPlanStore((s) => s.getPlanByDate);
+  const endOfDayReviews = useEndOfDayReviewStore((s) => s.reviews);
   const getReviewByDate = useEndOfDayReviewStore((s) => s.getReviewByDate);
   const allStreaks = useStreakStore((s) => s.getAllStreaks)();
   const activeStreakCount = useStreakStore((s) => s.getTotalActiveStreaks)();
+  const vaultEnabled = usePasswordVaultStore((s) => s.vaultEnabled);
+  const vaultEntries = usePasswordVaultStore((s) => s.entries);
+
+  // ─── Vault password visibility ────────────────────────────
+  const [vaultVisible, setVaultVisible] = useState<Record<string, boolean>>({});
 
   // ─── Date Navigation ───────────────────────────────────────
   const [selectedDateStr, setSelectedDateStr] = useState(getTodayDateStr);
@@ -206,17 +214,32 @@ export default function HomeScreen() {
     [dayTrades]
   );
 
-  // Day discipline score
+  // Day discipline score — matches store's calculateDisciplineScore weights
   const dayDiscipline = useMemo(() => {
-    if (dayTrades.length === 0) return { overall: 100, ruleAdherence: 100, journalConsistency: 100, planFollowing: 100 };
+    if (dayTrades.length === 0) return { overall: 100, ruleAdherence: 100, journalConsistency: 100, cooldownRespect: 100, tradeLimitRespect: 100, planFollowing: 100 };
     const followed = dayTrades.filter((r) => r.decision === 'followed');
     const journaled = dayTrades.filter((r) => r.entryEmotion || r.entryNote);
     const planned = dayTrades.filter((r) => r.isPlanned);
+
+    const cooldownTrades = dayTrades.filter((r) => r.cooldownOverride !== undefined);
+    const cooldownRespected = cooldownTrades.filter((r) => !r.cooldownOverride);
+    const cooldownRespect = cooldownTrades.length > 0 ? Math.round((cooldownRespected.length / cooldownTrades.length) * 100) : 100;
+
+    const tradeLimitTrades = dayTrades.filter((r) => r.tradeLimitOverride !== undefined);
+    const limitRespected = tradeLimitTrades.filter((r) => !r.tradeLimitOverride);
+    const tradeLimitRespect = tradeLimitTrades.length > 0 ? Math.round((limitRespected.length / tradeLimitTrades.length) * 100) : 100;
+
     const ruleAdherence = Math.round((followed.length / dayTrades.length) * 100);
     const journalConsistency = Math.round((journaled.length / dayTrades.length) * 100);
     const planFollowing = Math.round((planned.length / dayTrades.length) * 100);
-    const overall = Math.round(ruleAdherence * 0.4 + journalConsistency * 0.3 + planFollowing * 0.3);
-    return { overall, ruleAdherence, journalConsistency, planFollowing };
+    const overall = Math.round(
+      ruleAdherence * 0.30 +
+      journalConsistency * 0.20 +
+      cooldownRespect * 0.15 +
+      tradeLimitRespect * 0.15 +
+      planFollowing * 0.20
+    );
+    return { overall: Math.min(100, Math.max(0, overall)), ruleAdherence, journalConsistency, cooldownRespect, tradeLimitRespect, planFollowing };
   }, [dayTrades]);
 
   // Risk used for the selected day
@@ -354,6 +377,52 @@ export default function HomeScreen() {
                 </Card>
               )}
             </TouchableOpacity>
+          </Animated.View>
+        )}
+
+        {/* Broker Password Vault — only on today, only when enabled, only when plan is set */}
+        {isViewingToday && vaultEnabled && vaultEntries.length > 0 && (
+          <Animated.View entering={FadeInDown.delay(180).duration(400)}>
+            {dayPlan ? (
+              <Card style={styles.vaultCard}>
+                <View style={styles.vaultCardHeader}>
+                  <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
+                    <Path d="M19 11H5a2 2 0 00-2 2v7a2 2 0 002 2h14a2 2 0 002-2v-7a2 2 0 00-2-2zM7 11V7a5 5 0 0110 0v4" stroke={colors.verdictProceed} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+                  </Svg>
+                  <Text style={styles.vaultCardTitle}>Broker Access</Text>
+                </View>
+                {vaultEntries.map((entry) => (
+                  <TouchableOpacity
+                    key={entry.id}
+                    style={styles.vaultCardEntry}
+                    onPress={() => setVaultVisible((prev) => ({ ...prev, [entry.id]: !prev[entry.id] }))}
+                    activeOpacity={0.7}
+                  >
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.vaultCardBroker}>{entry.brokerName}</Text>
+                      {entry.username ? <Text style={styles.vaultCardUser}>{entry.username}</Text> : null}
+                    </View>
+                    <Text style={styles.vaultCardPw}>
+                      {vaultVisible[entry.id] ? entry.password : '••••••••'}
+                    </Text>
+                    <Svg width={14} height={14} viewBox="0 0 24 24" fill="none">
+                      {vaultVisible[entry.id] ? (
+                        <Path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24M1 1l22 22" stroke={colors.textMuted} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+                      ) : (
+                        <Path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8S1 12 1 12zM12 9a3 3 0 100 6 3 3 0 000-6z" stroke={colors.textMuted} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+                      )}
+                    </Svg>
+                  </TouchableOpacity>
+                ))}
+              </Card>
+            ) : (
+              <Card style={styles.vaultLockedCard}>
+                <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
+                  <Path d="M19 11H5a2 2 0 00-2 2v7a2 2 0 002 2h14a2 2 0 002-2v-7a2 2 0 00-2-2zM7 11V7a5 5 0 0110 0v4" stroke={colors.textMuted} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+                </Svg>
+                <Text style={styles.vaultLockedText}>Set your daily plan to unlock broker passwords</Text>
+              </Card>
+            )}
           </Animated.View>
         )}
 
@@ -883,6 +952,65 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontStyle: 'italic',
     marginTop: spacing.xs,
+  },
+
+  // ── Vault Card (unlocked)
+  vaultCard: {
+    gap: spacing.sm,
+    backgroundColor: colors.verdictProceed + '06',
+    borderColor: colors.verdictProceed + '20',
+  },
+  vaultCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  vaultCardTitle: {
+    fontSize: typography.sm,
+    fontFamily: typography.semiBold,
+    color: colors.verdictProceed,
+  },
+  vaultCardEntry: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    backgroundColor: colors.surface,
+    borderRadius: radii.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm + 2,
+  },
+  vaultCardBroker: {
+    fontSize: typography.sm,
+    fontFamily: typography.semiBold,
+    color: colors.textPrimary,
+  },
+  vaultCardUser: {
+    fontSize: typography.xs,
+    fontFamily: typography.regular,
+    color: colors.textMuted,
+  },
+  vaultCardPw: {
+    fontSize: typography.sm,
+    fontFamily: typography.regular,
+    color: colors.textSecondary,
+    letterSpacing: 1,
+    marginRight: spacing.xs,
+  },
+  // ── Vault Card (locked)
+  vaultLockedCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+  },
+  vaultLockedText: {
+    flex: 1,
+    fontSize: typography.xs,
+    fontFamily: typography.regular,
+    color: colors.textMuted,
   },
 
   // Plan Nudge Card (when no plan exists)
