@@ -43,6 +43,7 @@
       "expo-secure-store",
       "expo-font"
     ],
+    "privacyPolicyUrl": "https://stargandhi003.github.io/nudge-privacy/",
     "extra": {
       "eas": {
         "projectId": "4bd0df34-3179-45fc-9d71-68ece98ed50b"
